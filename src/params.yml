@@ -1,0 +1,52 @@
+name: phasst phase
+version: "1.0"
+author: Haynes Heaton <whheaton@gmail.com>
+about: phasing
+args:
+    - output:
+        long: output
+        short: o
+        takes_value: true
+        required: true
+        help: output directory
+    - het_kmers:
+        long: het_kmers
+        short: k
+        takes_value: true
+        required: true
+        help: het_kmers.tsv from het_snp_kmers output
+    - min_contig_length:
+        long: min_contig_length
+        takes_value: true
+        required: false
+        help: min contig length to try phasing (default 100000)
+    - hic_mols:
+        long: hic_mols
+        short: h
+        required: true
+        takes_value: true
+        help: hic kmers as output from molecule_kmers in fofn format
+    - threads:
+        short: t
+        long: threads
+        required: false
+        takes_value: true
+        help: max number of threads.
+    - assembly_fasta:
+        short: f
+        long: assembly_fasta
+        required: true
+        help: assembly fasta file
+        takes_value: true
+    - assembly_kmers:
+        short: a
+        long: assembly_kmers
+        required: true
+        help: assembly kmers file from molecule_kmers
+        takes_value: true
+    - break_window:
+        long: break_window
+        required: false
+        help: window of snps used to determine if contig should be split (default 100)
+        takes_value: true
+        
