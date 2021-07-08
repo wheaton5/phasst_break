@@ -533,7 +533,6 @@ fn assess_breakpoints(
 
     //for (contig, hic) in hic_links.iter() {
     for contig in 1..assembly.contig_names.len() {
-        if contig > 1 { break; }
         let contig_name = &assembly.contig_names[contig];
         let contig = &(contig as i32);
         let empty: Vec<Molecule> = Vec::new();
