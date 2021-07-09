@@ -52,7 +52,7 @@ fn main() {
     let kmers = Kmers::load_kmers(&params.het_kmers);
     //let (_variants, molecules) = load_molecule_kmers(&params.txg_mols, &params.hic_mols, &params.longread_mols, &kmers);
     eprintln!("loading hic kmers");
-    let hic_mols = load_hic(Some(&params.hic_mols), &kmers, false); 
+    let hic_mols = load_hic(Some(&params.hic_mols), &kmers, true); 
     eprintln!("loading assembly kmers");
     let assembly = load_assembly_kmers(&params.assembly_kmers, &params.assembly_fasta, &kmers);
     let allele_fractions = get_allele_fractions(&hic_mols); // MAYBE ADD LINKED Molecule AND LONG Molecule to this?
