@@ -10,7 +10,7 @@ use bio::utils::TextSlice;
 use std::path::Path;
 
 use phasst_lib::{
-    load_assembly_kmers, load_hic, load_hifi, load_linked_read_barcodes, Assembly, Mols, Kmers, KmerMols, Molecules,
+    load_assembly_kmers, load_hic, load_hifi, load_linked_read_barcodes, Assembly, Mols, Kmers, KmerMols, Molecules, KmerType,
 };
 use rayon::prelude::*;
 
@@ -55,7 +55,7 @@ fn main() {
     let hic_mols = load_hic(Some(&params.hic_mols), &kmers, true); 
     eprintln!("loading assembly kmers");
     let assembly = load_assembly_kmers(&params.assembly_kmers, &params.assembly_fasta, &kmers);
-    let allele_fractions = get_allele_fractions(&hic_mols); // MAYBE ADD LINKED Molecule AND LONG Molecule to this?
+    let allele_fractions = get_allele_fractions(&hic_mols, &kmers); // MAYBE ADD LINKED Molecule AND LONG Molecule to this?
     let bad_alleles = get_bad_alleles(&hic_mols);
     let variant_contig_order: ContigLoci =
         good_assembly_loci(&assembly, &allele_fractions, &bad_alleles);
@@ -67,6 +67,7 @@ fn good_assembly_loci(
     assembly: &Assembly,
     allele_fractions: &HashMap<i32, f32>,
     bad_alleles: &HashSet<i32>,
+    
 ) -> ContigLoci {
     // returning a map from kmer id to contig id and position
     let mut variant_contig_order: HashMap<i32, ContigLocus> = HashMap::new();
@@ -77,14 +78,14 @@ fn good_assembly_loci(
         if assembly.variants.contains_key(&Kmers::pair(*kmer)) {
             continue;
         } // we see both ref and alt in assembly, skip
+        
         if let Some(fraction) = allele_fractions.get(&kmer.abs()) {
             if *fraction < MIN_ALLELE_FRACTION_HIC {
                 continue;
             }
-            if bad_alleles.contains(kmer) {
-                continue;
-            }
-        } else {
+            
+        } 
+        if bad_alleles.contains(kmer) {
             continue;
         }
 
@@ -151,11 +152,18 @@ fn get_bad_alleles(hic_mols: &Mols) -> HashSet<i32> {
     bad
 }
 
-fn get_allele_fractions(hic_mols: &Mols) -> HashMap<i32, f32> {
+fn get_allele_fractions(hic_mols: &Mols, kmers: &Kmers) -> HashMap<i32, f32> {
     let mut allele_fractions: HashMap<i32, f32> = HashMap::new();
     let mut allele_counts: HashMap<i32, [u32; 2]> = HashMap::new();
     for mol in hic_mols.get_molecules() {
         for var in mol {
+            
+            match kmers.kmer_type.get(&var.abs()).unwrap() {
+                KmerType::PairedHet => (),
+                KmerType::UnpairedHet => continue,
+                KmerType::Homozygous => continue,
+            }
+           
             let canonical = var.abs().min(Kmers::pair(var.abs()));
             let count = allele_counts.entry(canonical).or_insert([0; 2]);
             if var.abs() % 2 == 0 {
