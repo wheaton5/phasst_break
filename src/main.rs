@@ -55,12 +55,13 @@ fn main() {
     let hic_mols = load_hic(Some(&params.hic_mols), &kmers, true); 
     eprintln!("loading assembly kmers");
     let assembly = load_assembly_kmers(&params.assembly_kmers, &params.assembly_fasta, &kmers);
-    let allele_fractions = get_allele_fractions(&hic_mols, &kmers); // MAYBE ADD LINKED Molecule AND LONG Molecule to this?
-    let bad_alleles = get_bad_alleles(&hic_mols);
-    let variant_contig_order: ContigLoci =
-        good_assembly_loci(&assembly, &allele_fractions, &bad_alleles);
-    let hic_links = gather_hic_links(&hic_mols, &variant_contig_order);
-    assess_breakpoints(&hic_links, &params, &variant_contig_order, &assembly);
+    //let allele_fractions = get_allele_fractions(&hic_mols, &kmers); // MAYBE ADD LINKED Molecule AND LONG Molecule to this?
+    //let bad_alleles = get_bad_alleles(&hic_mols);
+    //let variant_contig_order: ContigLoci =
+    //    good_assembly_loci(&assembly, &allele_fractions, &bad_alleles);
+    let hic_links = gather_hic_links(&hic_mols, &assembly);
+    
+    assess_breakpoints(&hic_links, &params, &assembly);
 }
 
 fn good_assembly_loci(
@@ -71,7 +72,7 @@ fn good_assembly_loci(
 ) -> ContigLoci {
     // returning a map from kmer id to contig id and position
     let mut variant_contig_order: HashMap<i32, ContigLocus> = HashMap::new();
-    let mut has_pair = 0; let mut fraction_bad = 0; let mut bad_allele = 0; let mut multiple = 0;
+    let mut has_pair = 0; let mut fraction_bad = 0; let mut bad_allele = 0; let mut multiple = 0; let mut total_passed = 0;
     let mut contig_positions: HashMap<i32, Vec<(usize, i32, i32)>> = HashMap::new();
     for (kmer, (contig, num, _order, position)) in assembly.variants.iter() {
       
@@ -97,9 +98,10 @@ fn good_assembly_loci(
         } // we see this kmer multiple times in the assembly, skip
         let positions = contig_positions.entry(*contig).or_insert(Vec::new());
         positions.push((*position, *kmer, *contig));
+        total_passed += 1;
     }
 
-    eprintln!("assembly loci dropped due to has pair {}, allele fraction bad {}, bad allele {}, multiple occurences {}", has_pair, fraction_bad, bad_allele, multiple);
+    eprintln!("assembly loci dropped due to has pair {}, allele fraction bad {}, bad allele {}, multiple occurences {}, good assembly location {}", has_pair, fraction_bad, bad_allele, multiple, total_passed);
 
     let mut loci: HashMap<i32, Vec<ContigLocus>> = HashMap::new();
     for (contig, positions) in contig_positions.iter() {
@@ -202,7 +204,7 @@ fn kmer_contig_position(kmer: i32, assembly: &Assembly, any: bool) -> Option<(i3
 }
 
 
-
+/*
 fn gather_hic_links(
     hic_molecules: &Mols,
     variant_contig_order: &ContigLoci,
@@ -272,7 +274,75 @@ fn gather_hic_links(
 
     hic_mols
 }
+*/
 
+fn gather_hic_links(
+    hic_molecules: &Mols,
+    //variant_contig_order: &ContigLoci,
+    assembly: &Assembly,
+) -> HashMap<i32, Vec<Molecule>> {
+    // returns map from contig id to list of HIC data structures
+    let mut hic_mols: HashMap<i32, Vec<Molecule>> = HashMap::new();
+    let mut total = 0;
+    for contig in 1..assembly.contig_names.len() {
+        hic_mols.insert(contig as i32, Vec::new());
+    }
+
+    let mut used_count = 0;
+    let mut not_assembly = 0;
+    let mut diff_contig = 0;
+    for mol in hic_molecules.get_molecules() {
+        let mut the_contig: Option<i32> = None;
+        let mut alleles: Vec<Allele> = Vec::new();
+        let mut loci: Vec<usize> = Vec::new();
+        let mut used: HashSet<i32> = HashSet::new();
+        let mut min: usize = std::usize::MAX;
+        let mut max: usize = 0;
+
+        for var in mol {
+            if used.contains(&var.abs()) {
+                used_count += 1;
+                continue;
+            }
+            if let Some((contig_id, position, index)) = kmer_contig_position(var.abs(), assembly, true) {
+                if let Some(chrom) = the_contig {
+                    min = min.min(position);
+                    max = max.max(position);
+                    if contig_id == chrom {
+                        alleles.push(allele(*var));
+                        loci.push(index);
+                    } else {
+                        diff_contig += 1;
+                    }
+                } else {
+                    min = min.min(position);
+                    max = max.max(position);
+                    the_contig = Some(contig_id);
+                    alleles.push(allele(*var));
+                    loci.push(index);
+                }
+            } else {
+                not_assembly += 1;
+            }
+
+            used.insert(var.abs());
+        }
+        if alleles.len() > 1 {
+            let contig_mols = hic_mols.entry(the_contig.unwrap()).or_insert(Vec::new());
+            contig_mols.push(Molecule {
+                alleles: alleles,
+                loci: loci,
+            });
+            total += 1;
+        }
+    }
+    eprintln!(
+        "after culling we have {} hic molecules hitting >=2 distinct loci",
+        total
+    );
+
+    hic_mols
+}
 
 fn allele(kmer: i32) -> Allele {
     match kmer.abs() % 2 == 0 {
@@ -330,7 +400,7 @@ fn check_add(
 }
 
 
-/*
+
 fn assess_breakpoints(
     hic_links: &HashMap<i32, Vec<Molecule>>,
     params: &Params,
@@ -531,9 +601,9 @@ fn assess_breakpoints(
     }
     (chunks, chunks_indices)
 }
-*/
 
 
+/*
 fn assess_breakpoints(
     hic_links: &HashMap<i32, Vec<Molecule>>,
     params: &Params,
@@ -733,7 +803,7 @@ fn assess_breakpoints(
     }
     (chunks, chunks_indices)
 }
-
+*/
 
 
 #[derive(Clone)]
