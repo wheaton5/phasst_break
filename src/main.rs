@@ -76,30 +76,30 @@ fn good_assembly_loci(
     for (kmer, (contig, num, _order, position)) in assembly.variants.iter() {
       
         if assembly.variants.contains_key(&Kmers::pair(*kmer)) {
-            continue;
             has_pair += 1;
+            continue;
         } // we see both ref and alt in assembly, skip
         
         if let Some(fraction) = allele_fractions.get(&kmer.abs()) {
             if *fraction < MIN_ALLELE_FRACTION_HIC {
-                continue;
                 fraction_bad += 1;
+                continue;
             }
         }
         if bad_alleles.contains(kmer) {
-            continue;
             bad_allele += 1;
+            continue;
         }
 
         if *num > 1 {
-            continue;
             multiple += 1;
+            continue;
         } // we see this kmer multiple times in the assembly, skip
         let positions = contig_positions.entry(*contig).or_insert(Vec::new());
         positions.push((*position, *kmer, *contig));
     }
 
-    eprintln!("assembly loci dropped due to has pair {}, allele fraction bad {}, bad allele {}, multiple occurances {}", has_pair, fraction_bad, bad_allele, multiple);
+    eprintln!("assembly loci dropped due to has pair {}, allele fraction bad {}, bad allele {}, multiple occurences {}", has_pair, fraction_bad, bad_allele, multiple);
 
     let mut loci: HashMap<i32, Vec<ContigLocus>> = HashMap::new();
     for (contig, positions) in contig_positions.iter() {
@@ -112,7 +112,7 @@ fn good_assembly_loci(
         for (index, (position, kmer, contig)) in poses.iter().enumerate() {
             let reference;
             let alternate;
-            
+
             match allele(*kmer) {
                 Allele::Ref => {
                     reference = kmer.abs();
