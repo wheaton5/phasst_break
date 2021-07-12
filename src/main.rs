@@ -158,12 +158,7 @@ fn get_allele_fractions(hic_mols: &Mols, kmers: &Kmers) -> HashMap<i32, f32> {
     for mol in hic_mols.get_molecules() {
         for var in mol {
             
-            match kmers.kmer_type.get(&var.abs()).unwrap() {
-                KmerType::PairedHet => (),
-                KmerType::UnpairedHet => continue,
-                KmerType::Homozygous => continue,
-            }
-           
+            
             let canonical = var.abs().min(Kmers::pair(var.abs()));
             let count = allele_counts.entry(canonical).or_insert([0; 2]);
             if var.abs() % 2 == 0 {
@@ -174,6 +169,12 @@ fn get_allele_fractions(hic_mols: &Mols, kmers: &Kmers) -> HashMap<i32, f32> {
         }
     }
     for (canonical, counts) in allele_counts {
+
+        match kmers.kmer_type.get(&canonical).unwrap() {
+            KmerType::PairedHet => (),
+            KmerType::UnpairedHet => continue,
+            KmerType::Homozygous => continue,
+        }
         let fraction = (counts[0].min(counts[1]) as f32) / ((counts[0] + counts[1]) as f32);
         allele_fractions.insert(canonical, fraction);
         allele_fractions.insert(Kmers::pair(canonical), fraction);
