@@ -672,7 +672,7 @@ dependencies = [
 [[package]]
 name = "phasst_lib"
 version = "0.1.0"
-source = "git+https://github.com/wheaton5/phasst_lib.git?branch=main#b268388b328aa1ef7a8a90a026861e3a1f623484"
+source = "git+https://github.com/wheaton5/phasst_lib.git?branch=main#13b5f75159fd1d63d4ccb18977625b7a12c4c358"
 dependencies = [
  "bio",
  "byteorder",
