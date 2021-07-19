@@ -204,78 +204,6 @@ fn kmer_contig_position(kmer: i32, assembly: &Assembly, any: bool) -> Option<(i3
 }
 
 
-/*
-fn gather_hic_links(
-    hic_molecules: &Mols,
-    variant_contig_order: &ContigLoci,
-) -> HashMap<i32, Vec<Molecule>> {
-    // returns map from contig id to list of HIC data structures
-    let mut hic_mols: HashMap<i32, Vec<Molecule>> = HashMap::new();
-    let mut long_hic_mols: HashMap<i32, Vec<Molecule>> = HashMap::new();
-    let mut total = 0;
-    for (contig, _) in variant_contig_order.loci.iter() {
-        hic_mols.insert(*contig, Vec::new());
-        long_hic_mols.insert(*contig, Vec::new());
-    }
-
-    let mut used_count = 0;
-    let mut not_assembly = 0;
-    let mut diff_contig = 0;
-    for mol in hic_molecules.get_molecules() {
-        let mut the_contig: Option<i32> = None;
-        let mut loci: Vec<usize> = Vec::new();
-        let mut alleles: Vec<Allele> = Vec::new();
-        let mut used: HashSet<i32> = HashSet::new();
-        let mut min: usize = std::usize::MAX;
-        let mut max: usize = 0;
-
-        for var in mol {
-            if used.contains(&var.abs()) {
-                used_count += 1;
-                continue;
-            }
-            if let Some(locus) = variant_contig_order.kmers.get(&var.abs()) {
-                if let Some(chrom) = the_contig {
-                    min = min.min(locus.position);
-                    max = max.max(locus.position);
-                    if locus.contig_id == chrom {
-                        loci.push(locus.index);
-                        alleles.push(allele(*var));
-                    } else {
-                        diff_contig += 1;
-                    }
-                } else {
-                    min = min.min(locus.position);
-                    max = max.max(locus.position);
-                    the_contig = Some(locus.contig_id);
-                    loci.push(locus.index);
-                    alleles.push(allele(*var));
-                }
-            } else {
-                not_assembly += 1;
-            }
-            used.insert(var.abs());
-        }
-        if loci.len() > 1 {
-            let contig_mols = hic_mols.entry(the_contig.unwrap()).or_insert(Vec::new());
-           
-            contig_mols.push(Molecule {
-                loci: loci,
-                alleles: alleles,
-            });
-            total += 1;
-        }
-    }
-    eprintln!(
-        "after culling we have {} hic molecules hitting >=2 distinct loci",
-        total
-    );
-    eprintln!("why did we lose kmers? overlaps (same kmer twice) {}, no assembly locus {}, cross contig {}", used_count, not_assembly, diff_contig);
-
-    hic_mols
-}
-*/
-
 fn gather_hic_links(
     hic_molecules: &Mols,
     //variant_contig_order: &ContigLoci,
@@ -293,11 +221,11 @@ fn gather_hic_links(
     let mut diff_contig = 0;
     for mol in hic_molecules.get_molecules() {
         let mut the_contig: Option<i32> = None;
-        let mut alleles: Vec<Allele> = Vec::new();
-        let mut loci: Vec<usize> = Vec::new();
+
         let mut used: HashSet<i32> = HashSet::new();
         let mut min: usize = std::usize::MAX;
         let mut max: usize = 0;
+        let mut loci_alleles: Vec<(usize, Allele)> = Vec::new();
 
         for var in mol {
             if used.contains(&var.abs()) {
@@ -309,8 +237,7 @@ fn gather_hic_links(
                     min = min.min(position);
                     max = max.max(position);
                     if contig_id == chrom {
-                        alleles.push(allele(*var));
-                        loci.push(index);
+                        loci_alleles.push((index, allele(*var)));
                     } else {
                         diff_contig += 1;
                     }
@@ -318,16 +245,23 @@ fn gather_hic_links(
                     min = min.min(position);
                     max = max.max(position);
                     the_contig = Some(contig_id);
-                    alleles.push(allele(*var));
-                    loci.push(index);
+                    loci_alleles.push((index, allele(*var)));
                 }
             } else {
                 not_assembly += 1;
             }
-
             used.insert(var.abs());
         }
-        if alleles.len() > 1 {
+
+
+        if loci_alleles.len() > 1 {
+            loci_alleles.sort_by(|a, b| a.0.cmp(&b.0));
+            let mut alleles: Vec<Allele> = Vec::new();
+            let mut loci: Vec<usize> = Vec::new();
+            for (index, allele) in loci_alleles {
+                alleles.push(allele);
+                loci.push(index);
+            }
             let contig_mols = hic_mols.entry(the_contig.unwrap()).or_insert(Vec::new());
             contig_mols.push(Molecule {
                 alleles: alleles,
@@ -367,16 +301,13 @@ fn check_remove(
     mol: &Molecule,
     mol_index: usize,
     current_mol_set: &mut HashSet<usize>,
-    left: usize,
-    right: usize,
+    mid: usize,
 ) {
-    let mut count = 0;
+    let mut max = 0;
     for locus in mol.loci.iter() {
-        if *locus >= left && *locus < right {
-            count += 1;
-        }
+        max = max.max(*locus);
     }
-    if count < 2 {
+    if max < mid {
         current_mol_set.remove(&mol_index);
     }
 }
@@ -394,7 +325,7 @@ fn check_add(
             count += 1;
         }
     }
-    if count < 2 {
+    if count > 1 {
         current_mol_set.insert(mol_index);
     }
 }
@@ -455,23 +386,24 @@ fn assess_breakpoints(
             }
         }
         for (middle_index, (position, kmer)) in kmer_positions.iter().enumerate() {
-            let mut left = middle_index - params.break_window;
+            let left: usize;//= middle_index - params.break_window;
             let right = middle_index + params.break_window;
-            if middle_index > params.break_window {
-                if let Some(hic_indexes) = locus_hic_mols.get(&(left - 1)) {
-                    for hic_index in hic_indexes {
-                        check_remove(
-                            &hic[*hic_index],
-                            *hic_index,
-                            &mut current_hic_mol_set,
-                            left,
-                            right,
-                        );
-                    }
-                }
-            } else {
+            if middle_index < params.break_window {
                 left = 0;
+            } else {
+                left = middle_index - params.break_window;
             }
+            if let Some(hic_indexes) = locus_hic_mols.get(&middle_index) {
+                for hic_index in hic_indexes {
+                    check_remove(
+                        &hic[*hic_index],
+                        *hic_index,
+                        &mut current_hic_mol_set,
+                        middle_index
+                    );
+                }
+            }
+            
             if let Some(hic_indexes) = locus_hic_mols.get(&(right - 1)) {
                 for hic_index in hic_indexes {
                     check_add(
