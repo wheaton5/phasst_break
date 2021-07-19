@@ -425,7 +425,6 @@ fn assess_breakpoints(
         let contig_chunk_indices = chunks_indices.entry(*contig).or_insert(Vec::new());
         let mut current_chunk = (0, 0);
         let mut current_chunk_indices = (0, 0);
-        let empty2: Vec<Option<bool>> = Vec::new();
         //let contig_phasing = phasing.phasing.get(contig).unwrap_or(&empty2); //expect("contig not in phasing?");
 
         let mut locus_hic_mols: HashMap<usize, Vec<usize>> = HashMap::new();
@@ -486,21 +485,33 @@ fn assess_breakpoints(
             }
 
             let mut hic_links = 0;
-            if middle_index > 250 && middle_index < kmer_positions.len() - 250 {
+            if middle_index > 2500 && middle_index < kmer_positions.len() - 2500 {
                 for hic_moldex in current_hic_mol_set.iter() {
                     let hicmol = &hic[*hic_moldex];
-                    let mut molcounts: [u16; 4] = [0; 4];
+                    let mut countme: bool = false;
+                    'outerloop:
                     for index1 in 0..hicmol.loci.len() {
                         let locus1 = hicmol.loci[index1];
                         for index2 in (index1 + 1)..hicmol.loci.len() {
                             let locus2 = hicmol.loci[index2];
                             if locus1 < middle_index && locus1 >= left && locus2 >= middle_index && locus2 < right {
-                                hic_links += 1;
-                                
+                                //hic_links += 1;
+                                countme = true;
+                                break 'outerloop; 
                             }
                         }
                     }
+                    if countme {
+                        hic_links += 1;
+                    }
                 }
+                if *contig < 4 {
+                    let (leftpos, _) = kmer_positions[left];
+                    let (rightpos, _) = kmer_positions[right];
+                    let (midpos, _) = kmer_positions[middle_index];
+                    eprintln!("contig {} middex {}, midpos {}, leftpos {}, rightpos {}, current_hic_mol_set {}, links {} ", contig, middle_index, midpos, leftpos, rightpos, current_hic_mol_set.len(), hic_links);
+                }
+              
 
             
                 if hic_links > 10 && in_chunk {
@@ -845,7 +856,7 @@ fn load_params() -> Params {
     let assembly_kmers = params.value_of("assembly_kmers").unwrap();
     let assembly_fasta = params.value_of("assembly_fasta").unwrap();
 
-    let break_window = params.value_of("break_window").unwrap_or("500");
+    let break_window = params.value_of("break_window").unwrap_or("5000");
     let break_window = break_window.to_string().parse::<usize>().unwrap();
     eprintln!("break window {}", break_window);
 
