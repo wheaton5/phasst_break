@@ -302,12 +302,16 @@ fn check_remove(
     mol_index: usize,
     current_mol_set: &mut HashSet<usize>,
     mid: usize,
+    left: usize, 
+    right: usize
 ) {
-    let mut max = 0;
+    let mut count = 0;
     for locus in mol.loci.iter() {
-        max = max.max(*locus);
+        if *locus > mid && *locus <= right {
+            count += 1;
+        }
     }
-    if max < mid {
+    if count < 1 {
         current_mol_set.remove(&mol_index);
     }
 }
@@ -399,7 +403,7 @@ fn assess_breakpoints(
                         &hic[*hic_index],
                         *hic_index,
                         &mut current_hic_mol_set,
-                        middle_index
+                        middle_index, left, right
                     );
                 }
             }
@@ -437,12 +441,14 @@ fn assess_breakpoints(
                         hic_links += 1;
                     }
                 }
+                /*
                 if *contig < 4 {
                     let (leftpos, _) = kmer_positions[left];
                     let (rightpos, _) = kmer_positions[right];
                     let (midpos, _) = kmer_positions[middle_index];
                     eprintln!("contig {} middex {}, midpos {}, leftpos {}, rightpos {}, current_hic_mol_set {}, links {} ", contig, middle_index, midpos, leftpos, rightpos, current_hic_mol_set.len(), hic_links);
                 }
+                */
               
 
             
@@ -545,210 +551,6 @@ fn assess_breakpoints(
     (chunks, chunks_indices)
 }
 
-
-/*
-fn assess_breakpoints(
-    hic_links: &HashMap<i32, Vec<Molecule>>,
-    params: &Params,
-    contig_loci: &ContigLoci,
-    assembly: &Assembly,
-) -> (
-    HashMap<i32, Vec<(usize, usize)>>,
-    HashMap<i32, Vec<(usize, usize)>>,
-) {
-    let mut chunks: HashMap<i32, Vec<(usize, usize)>> = HashMap::new(); // ranges for each contig
-    let mut chunks_indices: HashMap<i32, Vec<(usize, usize)>> = HashMap::new(); // ranges for each contig
-
-    //for (contig, hic) in hic_links.iter() {
-    for contig in 1..assembly.contig_names.len() {
-        let contig_name = &assembly.contig_names[contig];
-        let contig = &(contig as i32);
-        let empty: Vec<Molecule> = Vec::new();
-        let hic = hic_links.get(contig).unwrap_or(&empty); //(&format!("contig {} {} has no hic links, contig size {}", contig, contig_name, assembly.contig_sizes.get(contig).unwrap()));
-        let mut in_chunk = true;
-        let contig_chunk = chunks.entry(*contig).or_insert(Vec::new());
-        let contig_chunk_indices = chunks_indices.entry(*contig).or_insert(Vec::new());
-        let mut current_chunk = (0, 0);
-        let mut current_chunk_indices = (0, 0);
-        let empty2: Vec<Option<bool>> = Vec::new();
-
-        let mut locus_hic_mols: HashMap<usize, Vec<usize>> = HashMap::new();
-        for (read_index, hic_read) in hic.iter().enumerate() {
-            for locus in hic_read.loci.iter() {
-                let blah = locus_hic_mols.entry(*locus).or_insert(Vec::new());
-                blah.push(read_index);
-            }
-        }
-        let empty3: Vec<ContigLocus> = Vec::new();
-        let loci = contig_loci.loci.get(contig).unwrap_or(&empty3);
-
-        let mut current_hic_mol_set: HashSet<usize> = HashSet::new();
-        for index in 0..params.break_window {
-            let left = 0;
-            let right = params.break_window;
-            if let Some(hic_indexes) = locus_hic_mols.get(&index) {
-                for hic_index in hic_indexes {
-                    check_add(
-                        &hic[*hic_index],
-                        *hic_index,
-                        &mut current_hic_mol_set,
-                        left,
-                        right,
-                    );
-                }
-            }
-        }
-        for (mid, locus) in loci.iter().enumerate() {
-            let mut left = mid - params.break_window;
-            let right = mid + params.break_window;
-            if mid > params.break_window {
-                if let Some(hic_indexes) = locus_hic_mols.get(&(left - 1)) {
-                    for hic_index in hic_indexes {
-                        check_remove(
-                            &hic[*hic_index],
-                            *hic_index,
-                            &mut current_hic_mol_set,
-                            left,
-                            right,
-                        );
-                    }
-                }
-            } else {
-                left = 0;
-            }
-            if let Some(hic_indexes) = locus_hic_mols.get(&(right - 1)) {
-                for hic_index in hic_indexes {
-                    check_add(
-                        &hic[*hic_index],
-                        *hic_index,
-                        &mut current_hic_mol_set,
-                        left,
-                        right,
-                    );
-                }
-            }
-            let mut hic_links = 0;
-
-            for hic_moldex in current_hic_mol_set.iter() {
-                let hicmol = &hic[*hic_moldex];
-                let mut molcounts: [u16; 4] = [0; 4];
-                for index1 in 0..hicmol.loci.len() {
-                    for index2 in (index1 + 1)..hicmol.loci.len() {
-                        let locus1 = hicmol.loci[index1];
-                        let locus2 = hicmol.loci[index2];
-                        if locus1 < mid && locus1 >= left && locus2 >= mid && locus2 < right {
-                            hic_links += 1;
-                            
-                        }
-                    }
-                }
-            }
-            //eprintln!(
-            //    "contig {}, mid {} position {}, break_counts {:?}",
-            //   contig, locus.position, mid, counts
-            //);
-            if mid > 250 && mid < loci.len() - 250 {
-                if hic_links > 10 && in_chunk {
-                    current_chunk = (current_chunk.0, locus.position);
-                    current_chunk_indices = (current_chunk_indices.0, mid);
-                } else if hic_links <= 10 && in_chunk {
-                    in_chunk = false;
-                    if current_chunk.1 > current_chunk.0 {
-                        contig_chunk.push(current_chunk);
-                        contig_chunk_indices.push(current_chunk_indices);
-                        eprintln!(
-                            "adding chunk for contig, hic_links {} contig {}, chunk {:?}",
-                            hic_links,  contig_name, current_chunk
-                        );
-                    }
-                    current_chunk = (locus.position + 1, locus.position + 1);
-                    current_chunk_indices = (mid + 1, mid + 1);
-                } else if hic_links > 10 && !in_chunk {
-                    in_chunk = true;
-                    //current_chunk = (locus.position, locus.position);
-                }
-            } else if in_chunk {
-                current_chunk = (current_chunk.0, locus.position);
-                current_chunk_indices = (current_chunk_indices.0, mid);
-            }
-        }
-        if in_chunk || contig_chunk.len() == 0 {
-            current_chunk = (current_chunk.0, *assembly.contig_sizes.get(contig).unwrap());
-            contig_chunk.push(current_chunk);
-            let empty: Vec<ContigLocus> = Vec::new();
-            current_chunk_indices = (
-                current_chunk_indices.0,
-                contig_loci.loci.get(contig).unwrap_or(&empty).len(),
-            );
-            contig_chunk_indices.push(current_chunk_indices);
-            eprintln!(
-                "adding chunk at finish for contig {}, chunk {:?}, and indices {:?}",
-                contig_name, current_chunk, current_chunk_indices
-            );
-        }
-        if contig_chunk.len() > 1 {
-            eprintln!(
-                "contig {} with size {} is split into {} chunks",
-                contig,
-                *assembly.contig_sizes.get(contig).unwrap(),
-                contig_chunk.len()
-            );
-            for (start, end) in contig_chunk.iter() {
-                eprintln!("\t{} - {}", start, end);
-            }
-            for (startdex, enddex) in contig_chunk_indices.iter() {
-                eprintln!("\t{} - {}", startdex, enddex);
-            }
-        } else {
-            eprintln!("contig {} has no breaks", contig);
-            for (start, end) in contig_chunk.iter() {
-                eprintln!("\t{} - {}", start, end);
-            }
-            for (startdex, enddex) in contig_chunk_indices.iter() {
-                eprintln!("\t{} - {}", startdex, enddex);
-            }
-        }
-    }
-    let reader = fasta::Reader::from_file(Path::new(&params.assembly_fasta.to_string()))
-        .expect("fasta not found");
-    let mut writer = fasta::Writer::to_file(Path::new(&format!("{}/breaks.fa", params.output)))
-        .expect("cannot open fasta writer");
-    for record in reader.records() {
-        let record = record.unwrap();
-        let contig_name = record.id().to_string();
-        let contig_id = assembly.contig_ids.get(&contig_name).unwrap();
-
-        if !chunks.contains_key(contig_id) {
-            eprintln!("contig has no chunks??? {}", contig_id);
-            let size = assembly.contig_sizes.get(contig_id).unwrap();
-            let range = chunks.entry(*contig_id).or_insert(Vec::new());
-            range.push((0, *size));
-        }
-        let ranges = chunks.get(contig_id).unwrap();
-
-        for (index, (start, stop)) in ranges.iter().enumerate() {
-            let mut new_contig_name = contig_name.to_string();
-            if ranges.len() > 0 {
-                let list = vec![
-                    new_contig_name,
-                    (index + 1).to_string(),
-                    start.to_string(),
-                    stop.to_string(),
-                ];
-                new_contig_name = list.join("_");
-            }
-            let seq: TextSlice = &record.seq()[*start..*stop];
-            let record = Record::with_attrs(&new_contig_name, None, &seq);
-            writer
-                .write_record(&record)
-                .expect("could not write record");
-        }
-    }
-    (chunks, chunks_indices)
-}
-*/
-
-
 #[derive(Clone)]
 struct Params {
     het_kmers: String,
@@ -788,7 +590,7 @@ fn load_params() -> Params {
     let assembly_kmers = params.value_of("assembly_kmers").unwrap();
     let assembly_fasta = params.value_of("assembly_fasta").unwrap();
 
-    let break_window = params.value_of("break_window").unwrap_or("5000");
+    let break_window = params.value_of("break_window").unwrap_or("1000");
     let break_window = break_window.to_string().parse::<usize>().unwrap();
     eprintln!("break window {}", break_window);
 
