@@ -441,14 +441,14 @@ fn assess_breakpoints(
                         hic_links += 1;
                     }
                 }
-                /*
+                
                 if *contig < 4 {
                     let (leftpos, _) = kmer_positions[left];
                     let (rightpos, _) = kmer_positions[right];
                     let (midpos, _) = kmer_positions[middle_index];
                     eprintln!("contig {} middex {}, midpos {}, leftpos {}, rightpos {}, current_hic_mol_set {}, links {} ", contig, middle_index, midpos, leftpos, rightpos, current_hic_mol_set.len(), hic_links);
                 }
-                */
+                
               
 
             
@@ -590,7 +590,7 @@ fn load_params() -> Params {
     let assembly_kmers = params.value_of("assembly_kmers").unwrap();
     let assembly_fasta = params.value_of("assembly_fasta").unwrap();
 
-    let break_window = params.value_of("break_window").unwrap_or("1000");
+    let break_window = params.value_of("break_window").unwrap_or("5000");
     let break_window = break_window.to_string().parse::<usize>().unwrap();
     eprintln!("break window {}", break_window);
 
